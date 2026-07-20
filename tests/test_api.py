@@ -65,10 +65,10 @@ class _FakeDrives:
 
 
 class _FakeHttpError(Exception):
-    def __init__(self, status):
+    def __init__(self, status, message=""):
         self.resp = types.SimpleNamespace(status=status)
         self.status_code = status
-        super().__init__(f"HTTP {status}")
+        super().__init__(message or f"HTTP {status}")
 
 
 class _FakeService:
@@ -160,21 +160,45 @@ def test_walk_missing_returns_none(fake_build, monkeypatch):
     assert api.resolve_via_api(Path("/mnt/My Drive/Reports/Nope.pdf")) is None
 
 
-def test_http_403_raises_scope_hint(fake_build, monkeypatch):
+def _raise_http(monkeypatch, err):
     _mount(monkeypatch, ["My Drive", "Reports"])
-    monkeypatch.setattr(
-        api, "_resolve_segments_via_api", lambda _s: (_ for _ in ()).throw(_FakeHttpError(403))
+    monkeypatch.setattr(api, "_resolve_segments_via_api", lambda _s: (_ for _ in ()).throw(err))
+
+
+def test_http_403_insufficient_scopes(fake_build, monkeypatch):
+    _raise_http(monkeypatch, _FakeHttpError(403, "Request had insufficient authentication scopes."))
+    with pytest.raises(api.GurlError) as ei:
+        api.resolve_via_api(Path("/mnt/My Drive/Reports"))
+    assert "drive.readonly" in str(ei.value)
+
+
+def test_http_403_api_disabled(fake_build, monkeypatch):
+    _raise_http(
+        monkeypatch,
+        _FakeHttpError(403, "Drive API has not been used in project X or it is disabled."),
     )
     with pytest.raises(api.GurlError) as ei:
         api.resolve_via_api(Path("/mnt/My Drive/Reports"))
-    msg = str(ei.value)
-    assert "403" in msg and "drive.readonly" in msg
+    assert "services enable drive.googleapis.com" in str(ei.value)
+
+
+def test_http_403_quota_project(fake_build, monkeypatch):
+    _raise_http(
+        monkeypatch, _FakeHttpError(403, "The drive.googleapis.com API requires a quota project.")
+    )
+    with pytest.raises(api.GurlError) as ei:
+        api.resolve_via_api(Path("/mnt/My Drive/Reports"))
+    assert "set-quota-project" in str(ei.value)
+
+
+def test_http_401_expired(fake_build, monkeypatch):
+    _raise_http(monkeypatch, _FakeHttpError(401, "Invalid Credentials"))
+    with pytest.raises(api.GurlError) as ei:
+        api.resolve_via_api(Path("/mnt/My Drive/Reports"))
+    assert "401" in str(ei.value)
 
 
 def test_http_other_error_wrapped(fake_build, monkeypatch):
-    _mount(monkeypatch, ["My Drive", "Reports"])
-    monkeypatch.setattr(
-        api, "_resolve_segments_via_api", lambda _s: (_ for _ in ()).throw(_FakeHttpError(500))
-    )
+    _raise_http(monkeypatch, _FakeHttpError(500, "backend error"))
     with pytest.raises(api.GurlError):
         api.resolve_via_api(Path("/mnt/My Drive/Reports"))

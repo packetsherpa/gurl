@@ -134,19 +134,39 @@ def resolve_via_api(target: Path) -> DriveItem | None:
     try:
         return _resolve_segments_via_api(segments)
     except HttpError as exc:
-        status = getattr(exc, "status_code", None) or getattr(exc.resp, "status", None)
-        if str(status) == "403":
-            raise GurlError(
+        raise GurlError(_explain_http_error(exc)) from exc
+
+
+def _explain_http_error(exc) -> str:
+    """Turn a Drive API HttpError into an actionable message by its real reason."""
+    status = str(getattr(exc, "status_code", None) or getattr(exc.resp, "status", None))
+    low = str(exc).lower()
+
+    if status == "401":
+        return (
+            "Drive API returned 401 (credentials expired or invalid). "
+            "Re-authenticate and try again."
+        )
+
+    if status == "403":
+        if any(s in low for s in ("has not been used", "it is disabled", "accessnotconfigured")):
+            return (
+                "Drive API is not enabled in your ADC quota project. Enable it:\n"
+                "  gcloud services enable drive.googleapis.com "
+                "--project=<your-project>"
+            )
+        if "quota project" in low:
+            return (
+                "ADC needs a quota project with the Drive API enabled. Set one:\n"
+                "  gcloud auth application-default set-quota-project <your-project>"
+            )
+        if "insufficient" in low or "scope" in low:
+            return (
                 "Drive API returned 403 (insufficient scopes). Re-authenticate "
                 "with the Drive scope:\n  gcloud auth application-default login "
                 "--scopes=openid,https://www.googleapis.com/auth/drive.readonly"
-            ) from exc
-        if str(status) == "401":
-            raise GurlError(
-                "Drive API returned 401 (credentials expired or invalid). "
-                "Re-authenticate and try again."
-            ) from exc
-        raise GurlError(f"Drive API request failed: {exc}") from exc
+            )
+    return f"Drive API request failed: {exc}"
 
 
 def _resolve_segments_via_api(segments: list[str]) -> DriveItem | None:
