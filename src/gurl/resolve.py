@@ -3,7 +3,6 @@
 Order (hybrid strategy):
   1. Native sidecar JSON (.gdoc/.gsheet/...) — fastest, no DB/network.
   2. DriveFS local metadata database — folders and binary files.
-  3. Drive API fallback — Phase 3 (not yet wired in).
 """
 
 from __future__ import annotations
@@ -21,18 +20,17 @@ from .urls import DriveItem, url_for
 class Resolution:
     url: str
     item: DriveItem | None
-    source: str  # "sidecar" | "drivefs" | "api"
+    source: str  # "sidecar" | "drivefs"
 
 
-SOURCES = ("auto", "sidecar", "drivefs", "api")
+SOURCES = ("auto", "sidecar", "drivefs")
 
 
 def resolve(path: Path, source: str = "auto") -> Resolution:
     """Resolve a local path to its Drive URL, or raise GurlError.
 
     ``source`` selects the resolution strategy: ``auto`` (default) tries each in
-    order; ``sidecar``/``drivefs``/``api`` force a single strategy (useful for
-    testing and comparison).
+    order; ``sidecar``/``drivefs`` force a single strategy (useful for debugging).
     """
     target = path.expanduser()
     if not target.exists():
@@ -53,19 +51,6 @@ def resolve(path: Path, source: str = "auto") -> Resolution:
         item = resolve_via_drivefs(target)
         if item is not None:
             return Resolution(url=url_for(item), item=item, source="drivefs")
-
-    # 3. Drive API fallback.
-    if source in ("auto", "api"):
-        from .api import _api_available, resolve_via_api  # lazy: optional dependency
-
-        if source == "api" and not _api_available():
-            raise GurlError(
-                "Drive API support isn't installed. Install it with "
-                "`uv tool install --force '.[api]'` (or `pip install 'gurl[api]'`)."
-            )
-        item = resolve_via_api(target)
-        if item is not None:
-            return Resolution(url=url_for(item), item=item, source="api")
 
     raise GurlError(
         f"Could not resolve a Google Drive URL for: {path} (source={source}).\n"

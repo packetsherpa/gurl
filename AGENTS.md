@@ -14,15 +14,15 @@ its Drive **web URL**, prints it, and opens it in the browser. `PATH` defaults
 to the current directory. Flags: `--no-open`/`--print` (print only), `--id`
 (print just the Drive object id).
 
-Resolution is a hybrid, tried in order (`src/gurl/resolve.py`):
+Resolution is a hybrid, tried in order (`src/gurl/resolve.py`); `--source`
+forces one of `auto|sidecar|drivefs`:
 1. **Sidecar** (`sidecar.py`) — `.gdoc`/`.gsheet`/… files embed `doc_id` in JSON.
 2. **DriveFS DB** (`drivefs.py`) — folders/binary files via a read-only
    (`immutable=1`) name-walk of the local metadata SQLite DB.
-3. **Drive API** (`api.py`, extra `gurl[api]`) — ADC then cached OAuth; walks
-   the same segments via the API. Returns None if deps absent.
 
-URL shapes live in `urls.py`. Pure stdlib for local resolution; API deps are
-optional and lazily imported.
+URL shapes live in `urls.py`. Pure stdlib, fully local — no network or
+credentials. (A Drive API fallback was prototyped then removed — see
+`.claude/memory/`.)
 
 ### Gotchas (see `.claude/memory/`)
 - FUSE mount **inode ≠ `stable_id`** — no stable mapping; resolve by name-walk.

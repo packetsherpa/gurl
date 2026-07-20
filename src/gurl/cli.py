@@ -39,8 +39,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--source",
         choices=SOURCES,
         default="auto",
-        help="Force a resolution strategy (default: auto). Use 'api' to bypass "
-        "local resolution and go straight to the Drive API.",
+        help="Force a resolution strategy (default: auto) instead of trying "
+        "each in order. Useful for debugging.",
     )
     p.add_argument("--version", action="version", version=f"gurl {__version__}")
     return p

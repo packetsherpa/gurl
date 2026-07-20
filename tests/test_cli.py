@@ -61,5 +61,5 @@ def test_source_flag_passed_through(monkeypatch):
 
     monkeypatch.setattr(cli, "resolve", _capture)
     monkeypatch.setattr(cli.webbrowser, "open", lambda _u: None)
-    cli.main(["--source", "api", "."])
-    assert seen["source"] == "api"
+    cli.main(["--source", "drivefs", "."])
+    assert seen["source"] == "drivefs"
