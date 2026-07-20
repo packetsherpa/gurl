@@ -129,6 +129,27 @@ def resolve_via_api(target: Path) -> DriveItem | None:
     if not segments:
         return None
 
+    from googleapiclient.errors import HttpError
+
+    try:
+        return _resolve_segments_via_api(segments)
+    except HttpError as exc:
+        status = getattr(exc, "status_code", None) or getattr(exc.resp, "status", None)
+        if str(status) == "403":
+            raise GurlError(
+                "Drive API returned 403 (insufficient scopes). Re-authenticate "
+                "with the Drive scope:\n  gcloud auth application-default login "
+                "--scopes=openid,https://www.googleapis.com/auth/drive.readonly"
+            ) from exc
+        if str(status) == "401":
+            raise GurlError(
+                "Drive API returned 401 (credentials expired or invalid). "
+                "Re-authenticate and try again."
+            ) from exc
+        raise GurlError(f"Drive API request failed: {exc}") from exc
+
+
+def _resolve_segments_via_api(segments: list[str]) -> DriveItem | None:
     creds = _load_credentials()
     from googleapiclient.discovery import build
 

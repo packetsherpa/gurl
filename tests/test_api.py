@@ -64,6 +64,13 @@ class _FakeDrives:
         return _FakeExec({"drives": [{"id": did, "name": name}] if did else []})
 
 
+class _FakeHttpError(Exception):
+    def __init__(self, status):
+        self.resp = types.SimpleNamespace(status=status)
+        self.status_code = status
+        super().__init__(f"HTTP {status}")
+
+
 class _FakeService:
     def __init__(self, tree, drives):
         self._files = _FakeFiles(tree)
@@ -100,10 +107,14 @@ def fake_build(monkeypatch):
 
     fake_disc = types.ModuleType("googleapiclient.discovery")
     fake_disc.build = lambda *a, **k: service
+    fake_errors = types.ModuleType("googleapiclient.errors")
+    fake_errors.HttpError = _FakeHttpError
     fake_pkg = types.ModuleType("googleapiclient")
     fake_pkg.discovery = fake_disc
+    fake_pkg.errors = fake_errors
     monkeypatch.setitem(sys.modules, "googleapiclient", fake_pkg)
     monkeypatch.setitem(sys.modules, "googleapiclient.discovery", fake_disc)
+    monkeypatch.setitem(sys.modules, "googleapiclient.errors", fake_errors)
     return service
 
 
@@ -147,3 +158,23 @@ def test_walk_shared_drive_root(fake_build, monkeypatch):
 def test_walk_missing_returns_none(fake_build, monkeypatch):
     _mount(monkeypatch, ["My Drive", "Reports", "Nope.pdf"])
     assert api.resolve_via_api(Path("/mnt/My Drive/Reports/Nope.pdf")) is None
+
+
+def test_http_403_raises_scope_hint(fake_build, monkeypatch):
+    _mount(monkeypatch, ["My Drive", "Reports"])
+    monkeypatch.setattr(
+        api, "_resolve_segments_via_api", lambda _s: (_ for _ in ()).throw(_FakeHttpError(403))
+    )
+    with pytest.raises(api.GurlError) as ei:
+        api.resolve_via_api(Path("/mnt/My Drive/Reports"))
+    msg = str(ei.value)
+    assert "403" in msg and "drive.readonly" in msg
+
+
+def test_http_other_error_wrapped(fake_build, monkeypatch):
+    _mount(monkeypatch, ["My Drive", "Reports"])
+    monkeypatch.setattr(
+        api, "_resolve_segments_via_api", lambda _s: (_ for _ in ()).throw(_FakeHttpError(500))
+    )
+    with pytest.raises(api.GurlError):
+        api.resolve_via_api(Path("/mnt/My Drive/Reports"))
