@@ -13,9 +13,9 @@ removed on 2026-07-20.
 [[native-file-sidecar]] + [[drive-shortcuts]]) resolved every real path on the
 owner's machine, so the API path always lost the race. Proving it live also hit
 a hard environment wall: ADC user credentials require a quota project with the
-Drive API enabled, and the owner lacks `serviceusage.services.enable` on the
-org project (`ts-ai-assisted-api-hub`). Full auth worked (Drive scope granted),
-but the API-enablement gate is not something the owner can change.
+Drive API enabled, and the owner lacked permission to enable it on the only
+available quota project. Full auth worked (Drive scope granted), but the
+API-enablement gate was not something the owner could change.
 
 **How to apply:** keep gurl fully local — no network, no credentials, stdlib
 only. Don't re-introduce an API fallback unless the requirement changes *and*

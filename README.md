@@ -1,7 +1,5 @@
 # gurl
 
-[![CI](https://panwgithub.paloaltonetworks.local/ddeville/gurl/actions/workflows/ci.yml/badge.svg)](https://panwgithub.paloaltonetworks.local/ddeville/gurl/actions/workflows/ci.yml)
-
 A CLI to identify the Google Drive URL for the current working directory or a
 file within a Google Drive for Desktop mount, and open it in the browser.
 
