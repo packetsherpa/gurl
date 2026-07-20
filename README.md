@@ -1,7 +1,6 @@
 # gurl
 
-A CLI to identify the Google Drive URL for the current working directory or a
-file within a Google Drive for Desktop mount, and open it in the browser.
+A macOS Terminal CLI to identify the Google Drive URL for the current working directory or a file within a Google Drive for Desktop mount, and open it in the browser.
 
 Handles native Google files, folders, binary files, Shared Drives, and Drive
 shortcuts.
@@ -12,6 +11,31 @@ gurl path/to/file    # resolve a specific file or folder
 gurl --no-open .     # print the URL only (also --print)
 gurl --id report.pdf # print just the Drive object id
 ```
+
+## Installation
+
+Install as a standalone [uv](https://docs.astral.sh/uv/) tool — this gives
+`gurl` its own isolated environment and puts the executable on your `PATH`
+(`~/.local/bin`), with no `sudo` required:
+
+```
+# From a local checkout:
+uv tool install .
+
+# Or straight from the repo:
+uv tool install git+https://github.com/packetsherpa/gurl.git
+```
+
+Then run `gurl` from anywhere. Manage it with:
+
+```
+uv tool upgrade gurl                  # pull the latest published version
+uv tool install --force .             # reinstall after local code changes
+uv tool uninstall gurl                # remove it
+```
+
+If `gurl` isn't found after install, run `uv tool update-shell` (once) to add
+`~/.local/bin` to your `PATH`, then restart your shell.
 
 ## How it resolves
 
