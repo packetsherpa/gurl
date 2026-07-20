@@ -30,6 +30,9 @@ optional and lazily imported.
   `stable_id == team_drive_stable_id`. Different queries.
 - Native files' DB `local_title` has **no** extension; the filesystem name does
   — handled by the sidecar step (and extension-stripping in the API walk).
+- **Shortcuts** resolve to their target: folder/binary shortcuts are symlinks
+  into `.shortcut-targets-by-id/<TARGET_DRIVE_ID>/` (id is in the realpath);
+  native-file shortcuts carry the target `doc_id` in their sidecar.
 
 ### Dev
 - Run: `uv run gurl [PATH]`  •  Tests: `uv run pytest` (fixture DB, no live Drive).

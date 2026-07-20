@@ -29,6 +29,7 @@ EXT_TO_MIME = {
 }
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
+SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
 
 
 @dataclass

@@ -26,10 +26,16 @@ CREATE TABLE stable_parents (
     local_title_hash INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (item_stable_id, parent_stable_id)
 );
+CREATE TABLE shortcut_details (
+    shortcut_stable_id INTEGER PRIMARY KEY NOT NULL,
+    target_stable_id INTEGER NOT NULL,
+    target_mime_type TEXT NOT NULL
+);
 """
 
 FOLDER = "application/vnd.google-apps.folder"
 DOC = "application/vnd.google-apps.document"
+SHORTCUT = "application/vnd.google-apps.shortcut"
 
 
 def _item(cur, stable_id, drive_id, title, *, folder=False, mime="",
@@ -49,6 +55,14 @@ def _parent(cur, child, parent):
     )
 
 
+def _shortcut(cur, shortcut_stable_id, target_stable_id, target_mime):
+    cur.execute(
+        "INSERT INTO shortcut_details (shortcut_stable_id, target_stable_id, "
+        "target_mime_type) VALUES (?,?,?)",
+        (shortcut_stable_id, target_stable_id, target_mime),
+    )
+
+
 @pytest.fixture
 def fixture_db(tmp_path: Path) -> Path:
     """Build a small DriveFS-like DB and return its path.
@@ -59,6 +73,9 @@ def fixture_db(tmp_path: Path) -> Path:
           Q3.pdf (201, binary)
           notes (202, google doc)
         dup (300, folder)  +  dup (301, folder)  <- duplicate names
+        Team Docs Link (600, shortcut) -> Team Docs (700, folder, id=ID_TEAMDOCS)
+      Team Docs (700, folder) [target of the shortcut]
+        brief.pdf (701, binary)
       Shared drives (virtual)
         Team (500, id=TD_TEAM, team=500)
           spec.pdf (501, binary)
@@ -74,12 +91,18 @@ def fixture_db(tmp_path: Path) -> Path:
     _item(cur, 202, "ID_NOTES", "notes", mime=DOC)
     _item(cur, 300, "ID_DUP_A", "dup", folder=True, mime=FOLDER)
     _item(cur, 301, "ID_DUP_B", "dup", folder=True, mime=FOLDER)
+    # A shortcut in My Drive pointing at the Team Docs folder.
+    _item(cur, 600, "ID_SHORTCUT", "Team Docs Link", mime=SHORTCUT)
+    _item(cur, 700, "ID_TEAMDOCS", "Team Docs", folder=True, mime=FOLDER)
+    _item(cur, 701, "ID_BRIEF", "brief.pdf", mime="application/pdf")
+    _shortcut(cur, 600, 700, FOLDER)
     # Shared drive root: stable_id == team_drive_stable_id
     _item(cur, 500, "TD_TEAM", "Team", folder=True, mime=FOLDER, team=500)
     _item(cur, 501, "ID_SPEC", "spec.pdf", mime="application/pdf", team=500)
 
     for child, parent in [
-        (200, 101), (201, 200), (202, 200), (300, 101), (301, 101), (501, 500)
+        (200, 101), (201, 200), (202, 200), (300, 101), (301, 101),
+        (600, 101), (701, 700), (501, 500),
     ]:
         _parent(cur, child, parent)
 

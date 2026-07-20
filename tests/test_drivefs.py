@@ -56,6 +56,43 @@ def test_duplicate_names_warn_and_pick_first(fixture_db, capsys):
     assert "2 items named" in capsys.readouterr().err
 
 
+def test_final_item_shortcut_follows_target(fixture_db):
+    # Walking to the shortcut item itself resolves to its target folder.
+    with DriveDB(fixture_db) as db:
+        item = db.resolve_segments(["My Drive", "Team Docs Link"])
+    assert item.id == "ID_TEAMDOCS"
+    assert item.is_folder
+
+
+def test_shortcut_targets_by_id_anchor(fixture_db):
+    # realpath rewrites a folder shortcut to .shortcut-targets-by-id/<id>/<name>.
+    with DriveDB(fixture_db) as db:
+        item = db.resolve_segments(
+            [".shortcut-targets-by-id", "ID_TEAMDOCS", "Team Docs"]
+        )
+    assert item.id == "ID_TEAMDOCS"
+    assert item.is_folder
+
+
+def test_shortcut_targets_by_id_with_child(fixture_db):
+    with DriveDB(fixture_db) as db:
+        item = db.resolve_segments(
+            [".shortcut-targets-by-id", "ID_TEAMDOCS", "Team Docs", "brief.pdf"]
+        )
+    assert item.id == "ID_BRIEF"
+    assert not item.is_folder
+
+
+def test_shortcut_target_not_synced_locally(fixture_db):
+    # Unknown Drive id in the path: anchor on it and let Drive redirect.
+    with DriveDB(fixture_db) as db:
+        item = db.resolve_segments(
+            [".shortcut-targets-by-id", "UNKNOWN_ID", "whatever"]
+        )
+    assert item.id == "UNKNOWN_ID"
+    assert item.mime_type is None  # -> url_for emits open?id=UNKNOWN_ID
+
+
 def test_detect_mount_splits_segments(tmp_path, monkeypatch):
     mount = tmp_path / "GoogleDrive-user@example.com"
     target = mount / "My Drive" / "Reports"

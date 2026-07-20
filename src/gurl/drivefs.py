@@ -11,6 +11,10 @@ Key facts (verified against Drive for Desktop on macOS):
   * The FUSE mount inode is NOT the ``stable_id`` and has no stable mapping, so
     we resolve by walking the path segments by name from a known root.
   * A Shared Drive's root row has ``stable_id == team_drive_stable_id``.
+  * Shortcuts (``mime_type`` ``...google-apps.shortcut``) point at a target via
+    ``shortcut_details(shortcut_stable_id, target_stable_id, target_mime_type)``.
+    On disk they are symlinks into ``.shortcut-targets-by-id/<TARGET_DRIVE_ID>/``,
+    so a resolved path can arrive there directly (the id is in the path).
 
 This module is macOS-focused but keeps OS-specific locations behind small
 functions so Windows support can slot in later.
@@ -25,7 +29,11 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from . import GurlError
-from .urls import DriveItem
+from .urls import SHORTCUT_MIME, DriveItem
+
+# Symlinked shortcut targets live under this dir at the mount root; the path
+# segment immediately after it is the target's Drive id.
+SHORTCUT_TARGETS_DIR = ".shortcut-targets-by-id"
 
 # ---------------------------------------------------------------------------
 # OS-specific locations
@@ -166,33 +174,71 @@ class DriveDB:
             for r in cur.fetchall()
         ]
 
+    def _by_drive_id(self, drive_id: str) -> Optional[_Row]:
+        cur = self._conn.execute(
+            "SELECT stable_id, id, is_folder, mime_type FROM items "
+            "WHERE id = ? AND is_tombstone = 0 LIMIT 1",
+            (drive_id,),
+        )
+        r = cur.fetchone()
+        return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"]) if r else None
+
+    def _follow_shortcut(self, row: _Row) -> _Row:
+        """If ``row`` is a shortcut, resolve to its target; else return it.
+
+        Falls back to the shortcut's own id when the target isn't in the local
+        DB — opening a shortcut's own Drive URL redirects to the target.
+        """
+        if row.mime_type != SHORTCUT_MIME:
+            return row
+        cur = self._conn.execute(
+            "SELECT t.stable_id, t.id, t.is_folder, t.mime_type "
+            "FROM shortcut_details sd JOIN items t "
+            "  ON t.stable_id = sd.target_stable_id "
+            "WHERE sd.shortcut_stable_id = ? AND t.is_tombstone = 0",
+            (row.stable_id,),
+        )
+        r = cur.fetchone()
+        if r is None:
+            return row
+        return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"])
+
+    def _start_node(self, segments: List[str]) -> Tuple[Optional[_Row], List[str]]:
+        """Resolve the anchor row and the remaining child segments to walk."""
+        top = segments[0]
+        if top == SHORTCUT_TARGETS_DIR:
+            # <mount>/.shortcut-targets-by-id/<TARGET_DRIVE_ID>/<name>[/child...]
+            # The id names the target root; the next segment is its own name.
+            if len(segments) < 2:
+                return None, []
+            drive_id = segments[1]
+            root = self._by_drive_id(drive_id)
+            if root is None:
+                # Target not synced locally; anchor directly on the Drive id so
+                # the caller can emit a redirecting URL (no children to walk).
+                return _Row(-1, drive_id, is_folder=False, mime_type=""), []
+            return root, segments[3:]
+        if top == "Shared drives":
+            if len(segments) < 2:
+                raise GurlError(
+                    "Path points at the 'Shared drives' container; "
+                    "descend into a specific shared drive."
+                )
+            return self._shared_drive_root(segments[1]), segments[2:]
+        if top == "My Drive":
+            return self._mydrive_root(), segments[1:]
+        # Some setups mount My Drive contents at the top level.
+        return self._mydrive_root(), segments
+
     def resolve_segments(self, segments: List[str]) -> Optional[DriveItem]:
         """Walk in-drive path segments to the target item, or None if absent."""
         if not segments:
             return None
 
-        top = segments[0]
-        if top == "Shared drives":
-            if len(segments) < 2:
-                # The virtual "Shared drives" container has no single URL.
-                raise GurlError(
-                    "Path points at the 'Shared drives' container; "
-                    "descend into a specific shared drive."
-                )
-            root = self._shared_drive_root(segments[1])
-            rest = segments[2:]
-        elif top == "My Drive":
-            root = self._mydrive_root()
-            rest = segments[1:]
-        else:
-            # Some setups mount My Drive contents at the top level.
-            root = self._mydrive_root()
-            rest = segments
-
-        if root is None:
+        current, rest = self._start_node(segments)
+        if current is None:
             return None
 
-        current = root
         for name in rest:
             matches = self._children_named(current.stable_id, name)
             if not matches:
@@ -205,9 +251,13 @@ class DriveDB:
                 )
             current = matches[0]
 
+        # A resolved item may itself be a shortcut; open the target instead.
+        if current.stable_id >= 0:
+            current = self._follow_shortcut(current)
+
         return DriveItem(
             id=current.id,
-            mime_type=current.mime_type,
+            mime_type=current.mime_type or None,
             is_folder=current.is_folder,
             title=segments[-1],
         )
