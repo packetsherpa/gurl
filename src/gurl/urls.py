@@ -2,7 +2,35 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
+
+from . import GurlError
+
+# Drive object ids are URL-safe base64-ish tokens. Reject anything else before
+# interpolating into a URL so a crafted id can't inject path/query segments.
+_VALID_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Web hosts a resolved URL is ever allowed to point at. Used to vet the "url"
+# value embedded in a (possibly attacker-controlled) sidecar file.
+ALLOWED_URL_HOSTS = frozenset(
+    {
+        "docs.google.com",
+        "drive.google.com",
+        "script.google.com",
+        "sites.google.com",
+    }
+)
+
+
+def is_drive_web_url(url: str) -> bool:
+    """True if ``url`` is an HTTPS URL on a known Google web host."""
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and parts.hostname in ALLOWED_URL_HOSTS
 
 # mime_type -> (docs host path). Google-native editor URLs.
 _EDITOR_PATHS = {
@@ -43,6 +71,8 @@ class DriveItem:
 
 def url_for(item: DriveItem) -> str:
     """Return the best web URL for a resolved Drive item."""
+    if not _VALID_ID.match(item.id or ""):
+        raise GurlError(f"Refusing to build a URL for a malformed Drive id: {item.id!r}")
     if item.mime_type in _EDITOR_PATHS:
         return _EDITOR_PATHS[item.mime_type].format(id=item.id)
     if item.is_folder or item.mime_type == FOLDER_MIME:

@@ -14,12 +14,34 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .urls import EXT_TO_MIME, DriveItem
+from .urls import EXT_TO_MIME, DriveItem, is_drive_web_url
+
+# Sidecars are tiny JSON files; never read more than this from a file with a
+# native extension (it may be an attacker-shared or misnamed large file).
+_MAX_SIDECAR_BYTES = 65536
 
 
 def is_native_sidecar(path: Path) -> bool:
     """True if the path looks like a Google-native sidecar file by extension."""
     return path.suffix.lower() in EXT_TO_MIME
+
+
+def _load_sidecar(path: Path) -> dict | None:
+    """Read a bounded prefix of a native sidecar and parse it as a JSON object.
+
+    Returns None when the path isn't a native sidecar or can't be parsed. The
+    read is capped at the byte level so a large file with a native extension
+    never gets slurped whole into memory.
+    """
+    if not is_native_sidecar(path) or not path.is_file():
+        return None
+    try:
+        with path.open("rb") as fh:
+            raw = fh.read(_MAX_SIDECAR_BYTES)
+        data = json.loads(raw.decode("utf-8", errors="strict"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def resolve_sidecar(path: Path) -> DriveItem | None:
@@ -28,14 +50,8 @@ def resolve_sidecar(path: Path) -> DriveItem | None:
     Returns None (rather than raising) when the file is not parseable as a
     sidecar, so the caller can fall through to database resolution.
     """
-    if not is_native_sidecar(path) or not path.is_file():
-        return None
-    try:
-        # Sidecars are tiny; cap the read so we never slurp a large misnamed file.
-        data = json.loads(path.read_text(encoding="utf-8", errors="strict")[:65536])
-    except (OSError, ValueError):
-        return None
-    if not isinstance(data, dict):
+    data = _load_sidecar(path)
+    if data is None:
         return None
 
     doc_id = data.get("doc_id")
@@ -51,12 +67,16 @@ def resolve_sidecar(path: Path) -> DriveItem | None:
 
 
 def sidecar_direct_url(path: Path) -> str | None:
-    """Return a "url" value embedded directly in a sidecar, if present."""
-    if not is_native_sidecar(path) or not path.is_file():
+    """Return a "url" value embedded directly in a sidecar, if present.
+
+    The URL is only returned when it points at a known Google web host over
+    HTTPS; a sidecar can be attacker-controlled (shared into your Drive), so we
+    never hand an arbitrary URL to the browser.
+    """
+    data = _load_sidecar(path)
+    if data is None:
         return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8", errors="strict")[:65536])
-    except (OSError, ValueError):
-        return None
-    url = data.get("url") if isinstance(data, dict) else None
-    return url if isinstance(url, str) and url.startswith("http") else None
+    url = data.get("url")
+    if isinstance(url, str) and is_drive_web_url(url):
+        return url
+    return None
