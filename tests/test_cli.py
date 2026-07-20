@@ -12,7 +12,7 @@ def fake_resolution(monkeypatch):
         item=DriveItem(id="FID", is_folder=True),
         source="drivefs",
     )
-    monkeypatch.setattr(cli, "resolve", lambda _p: res)
+    monkeypatch.setattr(cli, "resolve", lambda _p, source="auto": res)
     return res
 
 
@@ -43,10 +43,23 @@ def test_id_only(fake_resolution, capsys):
 def test_error_exit_code(monkeypatch, capsys):
     from gurl import GurlError
 
-    def _raise(_):
+    def _raise(_p, source="auto"):
         raise GurlError("nope")
 
     monkeypatch.setattr(cli, "resolve", _raise)
     rc = cli.main(["."])
     assert rc == 1
     assert "gurl: nope" in capsys.readouterr().err
+
+
+def test_source_flag_passed_through(monkeypatch):
+    seen = {}
+
+    def _capture(_p, source="auto"):
+        seen["source"] = source
+        return Resolution(url="u", item=DriveItem(id="X"), source=source)
+
+    monkeypatch.setattr(cli, "resolve", _capture)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _u: None)
+    cli.main(["--source", "api", "."])
+    assert seen["source"] == "api"

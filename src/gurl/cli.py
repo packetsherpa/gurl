@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 from . import GurlError, __version__
-from .resolve import resolve
+from .resolve import SOURCES, resolve
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -35,6 +35,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print just the Drive object id.",
     )
+    p.add_argument(
+        "--source",
+        choices=SOURCES,
+        default="auto",
+        help="Force a resolution strategy (default: auto). Use 'api' to bypass "
+        "local resolution and go straight to the Drive API.",
+    )
     p.add_argument("--version", action="version", version=f"gurl {__version__}")
     return p
 
@@ -43,7 +50,7 @@ def main(argv=None) -> int:
     args = _build_parser().parse_args(argv)
 
     try:
-        result = resolve(Path(args.path))
+        result = resolve(Path(args.path), source=args.source)
     except GurlError as exc:
         print(f"gurl: {exc}", file=sys.stderr)
         return 1

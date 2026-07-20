@@ -45,3 +45,35 @@ def test_unresolved_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(resolve_mod, "resolve_via_drivefs", lambda _: None)
     with pytest.raises(GurlError):
         resolve(d)
+
+
+def test_source_api_bypasses_local(tmp_path, monkeypatch):
+    # A native sidecar that 'auto' would resolve locally...
+    f = tmp_path / "Plan.gdoc"
+    f.write_text(json.dumps({"doc_id": "ABC"}), encoding="utf-8")
+
+    def _no_sidecar(_):
+        raise AssertionError("source=api must not consult the sidecar")
+
+    monkeypatch.setattr(resolve_mod, "resolve_sidecar", _no_sidecar)
+    monkeypatch.setattr(resolve_mod, "sidecar_direct_url", _no_sidecar)
+    # resolve_via_api / _api_available are imported lazily inside resolve();
+    # patch them on their module.
+    from gurl import api
+
+    monkeypatch.setattr(api, "_api_available", lambda: True)
+    monkeypatch.setattr(api, "resolve_via_api", lambda _: DriveItem(id="APIID", is_folder=True))
+    res = resolve(f, source="api")
+    assert res.source == "api"
+    assert res.url == "https://drive.google.com/drive/folders/APIID"
+
+
+def test_source_drivefs_skips_sidecar(tmp_path, monkeypatch):
+    f = tmp_path / "Plan.gdoc"
+    f.write_text(json.dumps({"doc_id": "ABC"}), encoding="utf-8")
+    monkeypatch.setattr(
+        resolve_mod, "resolve_via_drivefs", lambda _: DriveItem(id="DFS", is_folder=True)
+    )
+    res = resolve(f, source="drivefs")
+    assert res.source == "drivefs"
+    assert res.item.id == "DFS"
