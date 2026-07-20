@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from gurl import GurlError, resolve as resolve_mod
+from gurl import GurlError
+from gurl import resolve as resolve_mod
 from gurl.resolve import resolve
 from gurl.urls import DriveItem
 
@@ -29,7 +30,8 @@ def test_falls_through_to_drivefs(tmp_path, monkeypatch):
     d = tmp_path / "folder"
     d.mkdir()
     monkeypatch.setattr(
-        resolve_mod, "resolve_via_drivefs",
+        resolve_mod,
+        "resolve_via_drivefs",
         lambda _: DriveItem(id="FID", is_folder=True),
     )
     res = resolve(d)

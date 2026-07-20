@@ -86,10 +86,15 @@ def fake_build(monkeypatch):
         ("root", "Reports"): {"id": "ID_REPORTS", "name": "Reports", "mimeType": FOLDER_MIME},
         ("ID_REPORTS", "Q3.pdf"): {"id": "ID_Q3", "name": "Q3.pdf", "mimeType": "application/pdf"},
         ("ID_REPORTS", "Plan"): {
-            "id": "ID_PLAN", "name": "Plan",
+            "id": "ID_PLAN",
+            "name": "Plan",
             "mimeType": "application/vnd.google-apps.document",
         },
-        ("TD_TEAM", "spec.pdf"): {"id": "ID_SPEC", "name": "spec.pdf", "mimeType": "application/pdf"},
+        ("TD_TEAM", "spec.pdf"): {
+            "id": "ID_SPEC",
+            "name": "spec.pdf",
+            "mimeType": "application/pdf",
+        },
     }
     service = _FakeService(tree, drives={"Team": "TD_TEAM"})
 

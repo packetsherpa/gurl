@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from .urls import EXT_TO_MIME, DriveItem
 
@@ -23,7 +22,7 @@ def is_native_sidecar(path: Path) -> bool:
     return path.suffix.lower() in EXT_TO_MIME
 
 
-def resolve_sidecar(path: Path) -> Optional[DriveItem]:
+def resolve_sidecar(path: Path) -> DriveItem | None:
     """Parse a native sidecar file into a DriveItem, or None if it isn't one.
 
     Returns None (rather than raising) when the file is not parseable as a
@@ -51,7 +50,7 @@ def resolve_sidecar(path: Path) -> Optional[DriveItem]:
     )
 
 
-def sidecar_direct_url(path: Path) -> Optional[str]:
+def sidecar_direct_url(path: Path) -> str | None:
     """Return a "url" value embedded directly in a sidecar, if present."""
     if not is_native_sidecar(path) or not path.is_file():
         return None

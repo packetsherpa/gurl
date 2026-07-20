@@ -1,7 +1,12 @@
 # gurl
 
+[![CI](https://panwgithub.paloaltonetworks.local/ddeville/gurl/actions/workflows/ci.yml/badge.svg)](https://panwgithub.paloaltonetworks.local/ddeville/gurl/actions/workflows/ci.yml)
+
 A CLI to identify the Google Drive URL for the current working directory or a
 file within a Google Drive for Desktop mount, and open it in the browser.
+
+Handles native Google files, folders, binary files, Shared Drives, and Drive
+shortcuts.
 
 ```
 gurl                 # resolve the current directory, open + print its Drive URL
@@ -43,6 +48,10 @@ resolution exclusively.
 ## Development
 
 ```
-uv run gurl [PATH]     # run
-uv run pytest          # tests (synthetic fixture DB; no live Drive needed)
+uv run gurl [PATH]         # run
+uv run pytest              # tests (synthetic fixture DB; no live Drive needed)
+uv run ruff check .        # lint
+uv run ruff format .       # format
 ```
+
+CI (GitHub Actions) runs ruff and pytest on Python 3.9 and 3.12.

@@ -14,8 +14,7 @@ from .resolve import resolve
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="gurl",
-        description="Identify the Google Drive URL for a local path and open it "
-        "in the browser.",
+        description="Identify the Google Drive URL for a local path and open it in the browser.",
     )
     p.add_argument(
         "path",
@@ -52,8 +51,7 @@ def main(argv=None) -> int:
     if args.id_only:
         if result.item is None or not result.item.id:
             print(
-                "gurl: no object id available for this resolution "
-                "(resolved to a direct URL).",
+                "gurl: no object id available for this resolution (resolved to a direct URL).",
                 file=sys.stderr,
             )
             return 1

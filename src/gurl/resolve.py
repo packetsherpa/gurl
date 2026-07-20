@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from . import GurlError
 from .drivefs import resolve_via_drivefs
@@ -21,7 +20,7 @@ from .urls import DriveItem, url_for
 @dataclass
 class Resolution:
     url: str
-    item: Optional[DriveItem]
+    item: DriveItem | None
     source: str  # "sidecar" | "drivefs" | "api"
 
 

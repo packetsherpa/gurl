@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional
 
 from . import GurlError
 from .drivefs import detect_mount
@@ -92,7 +91,7 @@ def _q_escape(name: str) -> str:
     return name.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _child_in(service, parent_id: str, name: str, *, drive_id: Optional[str]):
+def _child_in(service, parent_id: str, name: str, *, drive_id: str | None):
     """Find a single child named ``name`` under ``parent_id``."""
     params = dict(
         q=f"'{parent_id}' in parents and name = '{_q_escape(name)}' and trashed = false",
@@ -109,15 +108,17 @@ def _child_in(service, parent_id: str, name: str, *, drive_id: Optional[str]):
     return files[0]
 
 
-def _find_shared_drive(service, name: str) -> Optional[str]:
-    resp = service.drives().list(
-        q=f"name = '{_q_escape(name)}'", fields="drives(id, name)", pageSize=2
-    ).execute()
+def _find_shared_drive(service, name: str) -> str | None:
+    resp = (
+        service.drives()
+        .list(q=f"name = '{_q_escape(name)}'", fields="drives(id, name)", pageSize=2)
+        .execute()
+    )
     drives = resp.get("drives", [])
     return drives[0]["id"] if drives else None
 
 
-def resolve_via_api(target: Path) -> Optional[DriveItem]:
+def resolve_via_api(target: Path) -> DriveItem | None:
     """Resolve a mounted path through the Drive API, or None if not applicable."""
     if not _api_available():
         return None
@@ -133,7 +134,7 @@ def resolve_via_api(target: Path) -> Optional[DriveItem]:
 
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-    drive_id: Optional[str] = None
+    drive_id: str | None = None
     if segments[0] == "Shared drives":
         if len(segments) < 2:
             raise GurlError(
@@ -146,15 +147,13 @@ def resolve_via_api(target: Path) -> Optional[DriveItem]:
         parent_id = drive_id
         rest = segments[2:]
         if not rest:  # the shared drive root itself
-            return DriveItem(id=drive_id, mime_type=FOLDER_MIME, is_folder=True,
-                             title=segments[1])
+            return DriveItem(id=drive_id, mime_type=FOLDER_MIME, is_folder=True, title=segments[1])
     else:
         parent_id = "root"
         rest = segments[1:] if segments[0] == "My Drive" else segments
         if not rest:  # My Drive root
             root = service.files().get(fileId="root", fields="id").execute()
-            return DriveItem(id=root["id"], mime_type=FOLDER_MIME, is_folder=True,
-                             title="My Drive")
+            return DriveItem(id=root["id"], mime_type=FOLDER_MIME, is_folder=True, title="My Drive")
 
     node = None
     for i, name in enumerate(rest):

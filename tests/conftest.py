@@ -38,13 +38,13 @@ DOC = "application/vnd.google-apps.document"
 SHORTCUT = "application/vnd.google-apps.shortcut"
 
 
-def _item(cur, stable_id, drive_id, title, *, folder=False, mime="",
-          team=None, trashed=0, tombstone=0):
+def _item(
+    cur, stable_id, drive_id, title, *, folder=False, mime="", team=None, trashed=0, tombstone=0
+):
     cur.execute(
         "INSERT INTO items (stable_id, id, mime_type, is_folder, is_tombstone, "
         "trashed, local_title, team_drive_stable_id) VALUES (?,?,?,?,?,?,?,?)",
-        (stable_id, drive_id, mime, int(folder), int(tombstone), int(trashed),
-         title, team),
+        (stable_id, drive_id, mime, int(folder), int(tombstone), int(trashed), title, team),
     )
 
 
@@ -101,8 +101,14 @@ def fixture_db(tmp_path: Path) -> Path:
     _item(cur, 501, "ID_SPEC", "spec.pdf", mime="application/pdf", team=500)
 
     for child, parent in [
-        (200, 101), (201, 200), (202, 200), (300, 101), (301, 101),
-        (600, 101), (701, 700), (501, 500),
+        (200, 101),
+        (201, 200),
+        (202, 200),
+        (300, 101),
+        (301, 101),
+        (600, 101),
+        (701, 700),
+        (501, 500),
     ]:
         _parent(cur, child, parent)
 

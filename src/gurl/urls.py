@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 # mime_type -> (docs host path). Google-native editor URLs.
 _EDITOR_PATHS = {
@@ -37,9 +36,9 @@ class DriveItem:
     """A resolved Drive object."""
 
     id: str
-    mime_type: Optional[str] = None
+    mime_type: str | None = None
     is_folder: bool = False
-    title: Optional[str] = None
+    title: str | None = None
 
 
 def url_for(item: DriveItem) -> str:

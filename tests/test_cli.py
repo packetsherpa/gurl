@@ -1,6 +1,6 @@
 import pytest
 
-from gurl import cli, resolve as resolve_mod
+from gurl import cli
 from gurl.resolve import Resolution
 from gurl.urls import DriveItem
 

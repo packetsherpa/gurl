@@ -26,7 +26,6 @@ import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from . import GurlError
 from .urls import SHORTCUT_MIME, DriveItem
@@ -40,7 +39,7 @@ SHORTCUT_TARGETS_DIR = ".shortcut-targets-by-id"
 # ---------------------------------------------------------------------------
 
 
-def _drivefs_support_dir() -> Optional[Path]:
+def _drivefs_support_dir() -> Path | None:
     """Directory holding per-account DriveFS metadata, or None on this OS."""
     if sys.platform == "darwin":
         return Path.home() / "Library/Application Support/Google/DriveFS"
@@ -53,9 +52,9 @@ def _drivefs_support_dir() -> Optional[Path]:
     return None
 
 
-def _mount_roots() -> List[Path]:
+def _mount_roots() -> list[Path]:
     """Candidate Drive for Desktop mount roots on this OS."""
-    roots: List[Path] = []
+    roots: list[Path] = []
     if sys.platform == "darwin":
         cloud = Path.home() / "Library/CloudStorage"
         if cloud.is_dir():
@@ -67,7 +66,7 @@ def _mount_roots() -> List[Path]:
     return roots
 
 
-def find_account_dbs() -> List[Path]:
+def find_account_dbs() -> list[Path]:
     """All available DriveFS metadata databases, one per signed-in account."""
     support = _drivefs_support_dir()
     if not support or not support.is_dir():
@@ -86,7 +85,7 @@ def find_account_dbs() -> List[Path]:
 # ---------------------------------------------------------------------------
 
 
-def detect_mount(target: Path) -> Optional[Tuple[Path, List[str]]]:
+def detect_mount(target: Path) -> tuple[Path, list[str]] | None:
     """Split an absolute path into (mount_root, segments_within_mount).
 
     ``segments`` are the path parts under the mount, e.g.
@@ -131,7 +130,7 @@ class DriveDB:
     def close(self) -> None:
         self._conn.close()
 
-    def __enter__(self) -> "DriveDB":
+    def __enter__(self) -> DriveDB:
         return self
 
     def __exit__(self, *exc) -> None:
@@ -139,7 +138,7 @@ class DriveDB:
 
     # -- lookups -----------------------------------------------------------
 
-    def _mydrive_root(self) -> Optional[_Row]:
+    def _mydrive_root(self) -> _Row | None:
         """The My Drive root: titled 'My Drive' with no owning team drive."""
         cur = self._conn.execute(
             "SELECT stable_id, id, is_folder, mime_type FROM items "
@@ -149,7 +148,7 @@ class DriveDB:
         r = cur.fetchone()
         return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"]) if r else None
 
-    def _shared_drive_root(self, title: str) -> Optional[_Row]:
+    def _shared_drive_root(self, title: str) -> _Row | None:
         """A Shared Drive root: its row has stable_id == team_drive_stable_id."""
         cur = self._conn.execute(
             "SELECT stable_id, id, is_folder, mime_type FROM items "
@@ -160,7 +159,7 @@ class DriveDB:
         r = cur.fetchone()
         return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"]) if r else None
 
-    def _children_named(self, parent_stable_id: int, name: str) -> List[_Row]:
+    def _children_named(self, parent_stable_id: int, name: str) -> list[_Row]:
         cur = self._conn.execute(
             "SELECT i.stable_id, i.id, i.is_folder, i.mime_type "
             "FROM items i JOIN stable_parents sp "
@@ -174,7 +173,7 @@ class DriveDB:
             for r in cur.fetchall()
         ]
 
-    def _by_drive_id(self, drive_id: str) -> Optional[_Row]:
+    def _by_drive_id(self, drive_id: str) -> _Row | None:
         cur = self._conn.execute(
             "SELECT stable_id, id, is_folder, mime_type FROM items "
             "WHERE id = ? AND is_tombstone = 0 LIMIT 1",
@@ -203,7 +202,7 @@ class DriveDB:
             return row
         return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"])
 
-    def _start_node(self, segments: List[str]) -> Tuple[Optional[_Row], List[str]]:
+    def _start_node(self, segments: list[str]) -> tuple[_Row | None, list[str]]:
         """Resolve the anchor row and the remaining child segments to walk."""
         top = segments[0]
         if top == SHORTCUT_TARGETS_DIR:
@@ -230,7 +229,7 @@ class DriveDB:
         # Some setups mount My Drive contents at the top level.
         return self._mydrive_root(), segments
 
-    def resolve_segments(self, segments: List[str]) -> Optional[DriveItem]:
+    def resolve_segments(self, segments: list[str]) -> DriveItem | None:
         """Walk in-drive path segments to the target item, or None if absent."""
         if not segments:
             return None
@@ -263,7 +262,7 @@ class DriveDB:
         )
 
 
-def resolve_via_drivefs(target: Path) -> Optional[DriveItem]:
+def resolve_via_drivefs(target: Path) -> DriveItem | None:
     """Resolve a path through any account's DriveFS DB, or None if not found."""
     split = detect_mount(target)
     if split is None:
