@@ -1,0 +1,28 @@
+[project]
+name = "gurl"
+version = "0.1.0"
+description = "A CLI to identify the Google URL for the current working directory or a file in the directory and open it in the browser."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# Drive API fallback (Phase 3). Not required for local DriveFS resolution.
+api = [
+    "google-api-python-client>=2.0",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+]
+
+[project.scripts]
+gurl = "gurl.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gurl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

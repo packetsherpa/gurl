@@ -6,6 +6,15 @@
 CLAUDE.local.md
 
 
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
 # OS / editor
 .DS_Store
 

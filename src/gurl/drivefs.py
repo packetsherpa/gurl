@@ -1,0 +1,238 @@
+"""Resolve folders and binary files via the DriveFS local metadata database.
+
+Google Drive for Desktop keeps a SQLite database mapping each synced object to
+its Drive id. We open it strictly read-only (``immutable=1``) so we never lock
+or perturb the running client.
+
+Key facts (verified against Drive for Desktop on macOS):
+  * ``items(stable_id PK, id, mime_type, is_folder, team_drive_stable_id,
+    local_title, trashed, is_tombstone)`` — ``id`` is the Drive object id.
+  * ``stable_parents(item_stable_id, parent_stable_id)`` — the folder tree.
+  * The FUSE mount inode is NOT the ``stable_id`` and has no stable mapping, so
+    we resolve by walking the path segments by name from a known root.
+  * A Shared Drive's root row has ``stable_id == team_drive_stable_id``.
+
+This module is macOS-focused but keeps OS-specific locations behind small
+functions so Windows support can slot in later.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from . import GurlError
+from .urls import DriveItem
+
+# ---------------------------------------------------------------------------
+# OS-specific locations
+# ---------------------------------------------------------------------------
+
+
+def _drivefs_support_dir() -> Optional[Path]:
+    """Directory holding per-account DriveFS metadata, or None on this OS."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library/Application Support/Google/DriveFS"
+    if sys.platform.startswith("win"):
+        import os
+
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            return Path(local) / "Google/DriveFS"
+    return None
+
+
+def _mount_roots() -> List[Path]:
+    """Candidate Drive for Desktop mount roots on this OS."""
+    roots: List[Path] = []
+    if sys.platform == "darwin":
+        cloud = Path.home() / "Library/CloudStorage"
+        if cloud.is_dir():
+            roots.extend(sorted(cloud.glob("GoogleDrive-*")))
+        legacy = Path("/Volumes/GoogleDrive")
+        if legacy.is_dir():
+            roots.append(legacy)
+    # Windows drive-letter mounts are discovered lazily in detect_mount().
+    return roots
+
+
+def find_account_dbs() -> List[Path]:
+    """All available DriveFS metadata databases, one per signed-in account."""
+    support = _drivefs_support_dir()
+    if not support or not support.is_dir():
+        return []
+    dbs = []
+    for child in sorted(support.iterdir()):
+        if child.is_dir() and child.name.isdigit():
+            db = child / "metadata_sqlite_db"
+            if db.is_file():
+                dbs.append(db)
+    return dbs
+
+
+# ---------------------------------------------------------------------------
+# Path -> (mount, in-drive segments)
+# ---------------------------------------------------------------------------
+
+
+def detect_mount(target: Path) -> Optional[Tuple[Path, List[str]]]:
+    """Split an absolute path into (mount_root, segments_within_mount).
+
+    ``segments`` are the path parts under the mount, e.g.
+    ``["My Drive", "Reports", "Q3.pdf"]`` or
+    ``["Shared drives", "Team", "spec.pdf"]``. Returns None if the path is not
+    under a known Drive mount.
+    """
+    target = target.resolve()
+    for root in _mount_roots():
+        try:
+            rel = target.relative_to(root)
+        except ValueError:
+            continue
+        return root, [p for p in rel.parts if p not in (".", "")]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Database walk
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _Row:
+    stable_id: int
+    id: str
+    is_folder: bool
+    mime_type: str
+
+
+class DriveDB:
+    """Read-only accessor over a single account's metadata database."""
+
+    def __init__(self, db_path: Path):
+        self.path = db_path
+        # immutable=1: open without locks and without touching WAL; safe while
+        # Drive for Desktop is running.
+        uri = f"file:{db_path}?immutable=1"
+        self._conn = sqlite3.connect(uri, uri=True)
+        self._conn.row_factory = sqlite3.Row
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def __enter__(self) -> "DriveDB":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    # -- lookups -----------------------------------------------------------
+
+    def _mydrive_root(self) -> Optional[_Row]:
+        """The My Drive root: titled 'My Drive' with no owning team drive."""
+        cur = self._conn.execute(
+            "SELECT stable_id, id, is_folder, mime_type FROM items "
+            "WHERE local_title = 'My Drive' AND team_drive_stable_id IS NULL "
+            "AND is_folder = 1 AND is_tombstone = 0 LIMIT 1"
+        )
+        r = cur.fetchone()
+        return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"]) if r else None
+
+    def _shared_drive_root(self, title: str) -> Optional[_Row]:
+        """A Shared Drive root: its row has stable_id == team_drive_stable_id."""
+        cur = self._conn.execute(
+            "SELECT stable_id, id, is_folder, mime_type FROM items "
+            "WHERE local_title = ? AND stable_id = team_drive_stable_id "
+            "AND is_tombstone = 0 LIMIT 1",
+            (title,),
+        )
+        r = cur.fetchone()
+        return _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"]) if r else None
+
+    def _children_named(self, parent_stable_id: int, name: str) -> List[_Row]:
+        cur = self._conn.execute(
+            "SELECT i.stable_id, i.id, i.is_folder, i.mime_type "
+            "FROM items i JOIN stable_parents sp "
+            "  ON sp.item_stable_id = i.stable_id "
+            "WHERE sp.parent_stable_id = ? AND i.local_title = ? "
+            "  AND i.trashed = 0 AND i.is_tombstone = 0",
+            (parent_stable_id, name),
+        )
+        return [
+            _Row(r["stable_id"], r["id"], bool(r["is_folder"]), r["mime_type"])
+            for r in cur.fetchall()
+        ]
+
+    def resolve_segments(self, segments: List[str]) -> Optional[DriveItem]:
+        """Walk in-drive path segments to the target item, or None if absent."""
+        if not segments:
+            return None
+
+        top = segments[0]
+        if top == "Shared drives":
+            if len(segments) < 2:
+                # The virtual "Shared drives" container has no single URL.
+                raise GurlError(
+                    "Path points at the 'Shared drives' container; "
+                    "descend into a specific shared drive."
+                )
+            root = self._shared_drive_root(segments[1])
+            rest = segments[2:]
+        elif top == "My Drive":
+            root = self._mydrive_root()
+            rest = segments[1:]
+        else:
+            # Some setups mount My Drive contents at the top level.
+            root = self._mydrive_root()
+            rest = segments
+
+        if root is None:
+            return None
+
+        current = root
+        for name in rest:
+            matches = self._children_named(current.stable_id, name)
+            if not matches:
+                return None
+            if len(matches) > 1:
+                print(
+                    f"gurl: warning: {len(matches)} items named {name!r} in the "
+                    "same folder; using the first.",
+                    file=sys.stderr,
+                )
+            current = matches[0]
+
+        return DriveItem(
+            id=current.id,
+            mime_type=current.mime_type,
+            is_folder=current.is_folder,
+            title=segments[-1],
+        )
+
+
+def resolve_via_drivefs(target: Path) -> Optional[DriveItem]:
+    """Resolve a path through any account's DriveFS DB, or None if not found."""
+    split = detect_mount(target)
+    if split is None:
+        return None
+    _root, segments = split
+
+    dbs = find_account_dbs()
+    if not dbs:
+        raise GurlError(
+            "Path is under a Drive mount but no DriveFS metadata database was "
+            "found. Is Google Drive for Desktop installed and signed in?"
+        )
+
+    for db_path in dbs:
+        try:
+            with DriveDB(db_path) as db:
+                item = db.resolve_segments(segments)
+        except sqlite3.DatabaseError as exc:
+            raise GurlError(f"Could not read DriveFS database: {exc}") from exc
+        if item is not None:
+            return item
+    return None
