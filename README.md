@@ -16,7 +16,33 @@ gurl --id report.pdf # print just the Drive object id
    directly; read it, no database or network needed.
 2. **DriveFS metadata DB** — folders and binary files are resolved by walking
    the local Drive for Desktop SQLite metadata (opened strictly read-only).
-3. **Drive API** — fallback for paths the local DB can't resolve *(planned)*.
+3. **Drive API** — fallback for mounted paths the local DB can't resolve.
 
 macOS is supported today; the OS-specific bits are isolated so Windows can be
 added later. Requires Google Drive for Desktop installed and signed in.
+
+## Drive API fallback (optional)
+
+Install the extra and authenticate one of two ways:
+
+```
+uv pip install 'gurl[api]'        # or: pip install 'gurl[api]'
+
+# Option A — gcloud Application Default Credentials (with the Drive scope):
+gcloud auth application-default login \
+  --scopes=openid,https://www.googleapis.com/auth/drive.readonly
+
+# Option B — OAuth client (no gcloud): place your OAuth client JSON at
+# ~/.config/gurl/client_secret.json (or set $GURL_OAUTH_CLIENT); gurl caches
+# the token at ~/.config/gurl/token.json after a one-time browser consent.
+```
+
+Read-only Drive scope only. Without the extra installed, gurl uses local
+resolution exclusively.
+
+## Development
+
+```
+uv run gurl [PATH]     # run
+uv run pytest          # tests (synthetic fixture DB; no live Drive needed)
+```
