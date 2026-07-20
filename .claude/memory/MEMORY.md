@@ -13,3 +13,6 @@ fact. Live/churning state lives in `project-context.md`, not here.
          type: user | feedback | project | reference
        ---
 -->
+
+- [DriveFS schema](drivefs-schema.md) — local metadata SQLite tables + landmines (inode≠stable_id; My Drive vs Shared Drive root queries)
+- [Native file sidecar](native-file-sidecar.md) — .gdoc/.gsheet files embed doc_id in JSON; resolve offline, no DB
