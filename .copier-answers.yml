@@ -1,0 +1,10 @@
+# Changes here will be overwritten by `copier update`. Managed by tool-template.
+_commit: v0.5.0
+_src_path: https://github.com/packetsherpa/tool-template.git
+include_agent_coordination: false
+include_project_context: true
+is_python: false
+project_description: A CLI to identify the Google URL for the current working directory
+    or a file in the directory and open it in the browser.
+project_name: gurl
+
