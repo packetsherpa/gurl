@@ -14,7 +14,7 @@ A CLI to identify the Google URL for the current working directory or a file in 
   print, `--no-open`/`--print`, `--id`, `--source`), and **Drive shortcut
   following**. 38 pytest tests pass. Fully local — no network/credentials.
 - Tooling: ruff (lint + format) and GitHub Actions CI (ruff + pytest on
-  Python 3.9 and 3.12). Installed globally via `uv tool install`.
+  Python 3.10 and 3.12). Installed globally via `uv tool install`.
 - Validated live on macOS against a real Drive (My Drive, Shared Drives,
   native docs, binary files, folder/native shortcuts, spaces/pipes in names).
 - **Drive API fallback removed** — see `.claude/memory/api-fallback-removed.md`.

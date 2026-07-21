@@ -59,4 +59,4 @@ uv run ruff check .        # lint
 uv run ruff format .       # format
 ```
 
-CI (GitHub Actions) runs ruff and pytest on Python 3.9 and 3.12.
+CI (GitHub Actions) runs ruff and pytest on Python 3.10 and 3.12.

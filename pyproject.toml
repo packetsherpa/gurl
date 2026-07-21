@@ -3,18 +3,18 @@ name = "gurl"
 version = "0.1.0"
 description = "A CLI to identify the Google URL for the current working directory or a file in the directory and open it in the browser."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
 gurl = "gurl.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=9.0.3", "ruff>=0.6"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
