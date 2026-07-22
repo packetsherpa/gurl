@@ -24,3 +24,6 @@ dist/
 *.key
 *.pem
 .drive-dest
+
+# Local Drive export script (maintained in the drive-sync repo)
+scripts/export-to-drive.sh
